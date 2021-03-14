@@ -1,0 +1,76 @@
+var db = 'telegraf'
+
+var rp = 'autogen'
+
+var measurement = 'http_response'
+
+var groupBy = ['server']
+
+var whereFilter = lambda: isPresent("http_response_code")
+
+var name = 'Check HTTP Code'
+
+var idVar = name
+
+var message = '{{.ID}}
+Server: {{.Group}}
+STATUS: {{ if eq .Level "OK" }}Running{{ else }}Check your Server{{ end }}
+HTTP Code: {{ index .Fields "value" }}
+'
+
+var idTag = 'alertID'
+
+var levelTag = 'level'
+
+var messageField = 'message'
+
+var durationField = 'duration'
+
+var outputDB = 'chronograf'
+
+var outputRP = 'autogen'
+
+var outputMeasurement = 'alerts'
+
+var triggerType = 'threshold'
+
+var error = 400
+
+var data = stream
+    |from()
+        .database(db)
+        .retentionPolicy(rp)
+        .measurement(measurement)
+        .groupBy(groupBy)
+        .where(whereFilter)
+    |eval(lambda: "http_response_code")
+        .as('value')
+
+var trigger = data
+    |alert()
+        .crit(lambda: "value" >= error )
+        .stateChangesOnly()
+        .message(message)
+        .id(idVar)
+        .idTag(idTag)
+        .levelTag(levelTag)
+        .messageField(messageField)
+        .durationField(durationField)
+        .telegram()
+        .chatId('817269876')
+        .parseMode('Markdown')
+
+trigger
+    |eval(lambda: float("value"))
+        .as('value')
+        .keep()
+    |influxDBOut()
+        .create()
+        .database(outputDB)
+        .retentionPolicy(outputRP)
+        .measurement(outputMeasurement)
+        .tag('alertName', name)
+        .tag('triggerType', triggerType)
+
+trigger
+    |httpOut('output')
